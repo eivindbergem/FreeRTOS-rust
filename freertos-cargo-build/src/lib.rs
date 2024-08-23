@@ -142,7 +142,8 @@ impl Builder {
             .filter_map(|entry| {
                 let f_name = entry.path().to_str().unwrap();
 
-                if f_name.ends_with(".c") {
+                if f_name.ends_with(".c") || f_name.ends_with(".S") {
+                    eprintln!("filename = {}", f_name);
                     return Some(entry.path().to_owned());
                 }
                 None
