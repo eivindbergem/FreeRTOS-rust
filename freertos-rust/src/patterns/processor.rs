@@ -15,7 +15,7 @@ pub trait ReplyableMessage {
 #[derive(Copy, Clone)]
 pub struct InputMessage<I>
 where
-    I: Copy,
+    I: Copy + Send,
 {
     val: I,
     reply_to_client_id: Option<usize>,
@@ -23,7 +23,7 @@ where
 
 impl<I> InputMessage<I>
 where
-    I: Copy,
+    I: Copy + Send,
 {
     pub fn request(val: I) -> Self {
         InputMessage {
@@ -46,7 +46,7 @@ where
 
 impl<I> ReplyableMessage for InputMessage<I>
 where
-    I: Copy,
+    I: Copy + Send,
 {
     fn reply_to_client_id(&self) -> Option<usize> {
         self.reply_to_client_id
@@ -55,8 +55,8 @@ where
 
 pub struct Processor<I, O>
 where
-    I: ReplyableMessage + Copy,
-    O: Copy,
+    I: ReplyableMessage + Copy + Send,
+    O: Copy + Send,
 {
     queue: Arc<Queue<I>>,
     inner: Arc<Mutex<ProcessorInner<O>>>,
@@ -64,8 +64,8 @@ where
 
 impl<I, O> Processor<I, O>
 where
-    I: ReplyableMessage + Copy,
-    O: Copy,
+    I: ReplyableMessage + Copy + Send,
+    O: Copy + Send,
 {
     pub fn new(queue_size: usize) -> Result<Self, FreeRtosError> {
         let p = ProcessorInner {
@@ -152,8 +152,8 @@ where
 
 impl<I, O> Processor<InputMessage<I>, O>
 where
-    I: Copy,
-    O: Copy,
+    I: Copy + Send,
+    O: Copy + Send,
 {
     pub fn reply_val<D: DurationTicks>(
         &self,
@@ -167,7 +167,7 @@ where
 
 struct ProcessorInner<O>
 where
-    O: Copy,
+    O: Copy + Send,
 {
     clients: Vec<(usize, Weak<ClientWithReplyQueue<O>>)>,
     next_client_id: usize,
@@ -175,7 +175,7 @@ where
 
 impl<O> ProcessorInner<O>
 where
-    O: Copy,
+    O: Copy + Send,
 {
     fn remove_client_reply(&mut self, client: &ClientWithReplyQueue<O>) {
         self.clients.retain(|ref x| x.0 != client.id)
@@ -184,7 +184,7 @@ where
 
 pub struct ProcessorClient<I, C>
 where
-    I: ReplyableMessage + Copy,
+    I: ReplyableMessage + Copy + Send,
 {
     processor_queue: Weak<Queue<I>>,
     client_reply: C,
@@ -192,7 +192,7 @@ where
 
 impl<I, O> ProcessorClient<I, O>
 where
-    I: ReplyableMessage + Copy,
+    I: ReplyableMessage + Copy + Send,
 {
     pub fn send<D: DurationTicks>(&self, message: I, max_wait: D) -> Result<(), FreeRtosError> {
         let processor_queue = self
@@ -218,7 +218,7 @@ where
 
 impl<I> ProcessorClient<InputMessage<I>, ()>
 where
-    I: Copy,
+    I: Copy + Send,
 {
     pub fn send_val<D: DurationTicks>(&self, val: I, max_wait: D) -> Result<(), FreeRtosError> {
         self.send(InputMessage::request(val), max_wait)
@@ -235,8 +235,8 @@ where
 
 impl<I, O> ProcessorClient<I, SharedClientWithReplyQueue<O>>
 where
-    I: ReplyableMessage + Copy,
-    O: Copy,
+    I: ReplyableMessage + Copy + Send,
+    O: Copy + Send,
 {
     pub fn call<D: DurationTicks>(&self, message: I, max_wait: D) -> Result<O, FreeRtosError> {
         self.send(message, max_wait)?;
@@ -250,8 +250,8 @@ where
 
 impl<I, O> ProcessorClient<InputMessage<I>, SharedClientWithReplyQueue<O>>
 where
-    I: Copy,
-    O: Copy,
+    I: Copy + Send,
+    O: Copy + Send,
 {
     pub fn send_val<D: DurationTicks>(&self, val: I, max_wait: D) -> Result<(), FreeRtosError> {
         self.send(InputMessage::request(val), max_wait)
@@ -268,7 +268,7 @@ where
 
 impl<I, C> Clone for ProcessorClient<I, C>
 where
-    I: ReplyableMessage + Copy,
+    I: ReplyableMessage + Copy + Send,
     C: Clone,
 {
     fn clone(&self) -> Self {
@@ -281,7 +281,7 @@ where
 
 pub struct ClientWithReplyQueue<O>
 where
-    O: Copy,
+    O: Copy + Send,
 {
     id: usize,
     processor_inner: Arc<Mutex<ProcessorInner<O>>>,
@@ -290,7 +290,7 @@ where
 
 impl<O> Drop for ClientWithReplyQueue<O>
 where
-    O: Copy,
+    O: Copy + Send,
 {
     fn drop(&mut self) {
         if let Ok(mut p) = self.processor_inner.lock(Duration::ms(1000)) {
